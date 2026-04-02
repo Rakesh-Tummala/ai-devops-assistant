@@ -1,0 +1,5 @@
+{
+  "name": "AI DevOps Assistant",
+  "description": "An AI-powered tool to analyze cloud logs and provide DevOps optimization suggestions using Gemini.",
+  "requestFramePermissions": []
+}
