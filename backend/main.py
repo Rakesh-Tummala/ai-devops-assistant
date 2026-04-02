@@ -18,7 +18,7 @@ load_dotenv()
 
 # Gemini Client
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
+client = genai.GenerativeModel("gemini-2.5-flash")
 # FastAPI app
 app = FastAPI()
 
