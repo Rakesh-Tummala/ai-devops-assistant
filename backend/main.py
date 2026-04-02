@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import os
 import subprocess
 from dotenv import load_dotenv
-from google.generativeai import genai
+import google.generativeai as genai
 from fastapi.middleware.cors import CORSMiddleware
 import threading
 from deploy_render import deploy_to_render
