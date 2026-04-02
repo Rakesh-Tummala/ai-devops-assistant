@@ -202,7 +202,7 @@ async def generate_docker(
             start_command = 'RUN npm run build\nRUN npm install -g serve\nCMD ["serve","-s","dist","-l","3000"]'
 
 
-    response = client.models.generate_content(
+    response = client.generate_content(
         model="gemini-2.5-flash",
         contents=f"""
 Generate a production-ready Dockerfile for a {project_type} project.
@@ -309,7 +309,7 @@ async def analyze_log(file: UploadFile = File(...)):
     except:
         logs = content.decode("latin-1")
 
-    response = client.models.generate_content(
+    response = client.generate_content(
         model="gemini-2.5-flash",
         contents=f"""
 Analyze these logs and explain errors:
@@ -340,7 +340,7 @@ def deploy_render():
 
 @app.post("/chat/")
 def chat(request: ChatRequest):
-    response = client.models.generate_content(
+    response = client.generate_content(
         model="gemini-2.5-flash",
         contents=request.message
     )
