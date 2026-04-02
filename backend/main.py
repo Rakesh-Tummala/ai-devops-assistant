@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import os
 import subprocess
 from dotenv import load_dotenv
-import google.generativeai as genai
+import google.generativeai as genai  
 from fastapi.middleware.cors import CORSMiddleware
 import threading
 from deploy_render import deploy_to_render
@@ -17,7 +17,7 @@ from deployment.github_push import push_to_github
 load_dotenv()
 
 # Gemini Client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # FastAPI app
 app = FastAPI()
