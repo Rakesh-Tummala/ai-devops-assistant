@@ -3,10 +3,11 @@ from pydantic import BaseModel
 import os
 import subprocess
 from dotenv import load_dotenv
-import google.generativeai as genai  
+import google.generativeai as genai
 from fastapi.middleware.cors import CORSMiddleware
 import threading
 from deploy_render import deploy_to_render
+
 # Local Imports
 from utils.zip_handler import extract_zip
 from utils.project_detector import detect_project
@@ -16,15 +17,17 @@ from deployment.github_push import push_to_github
 # Load environment variables
 load_dotenv()
 
-# Gemini Client
+# Gemini Setup
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-client = genai.GenerativeModel("gemini-2.5-flash")
+model = genai.GenerativeModel("gemini-2.5-flash")
+
 # FastAPI app
 app = FastAPI()
 
 # Create folders
 os.makedirs("generated", exist_ok=True)
 os.makedirs("projects", exist_ok=True)
+
 PORT = os.getenv("PORT", "10000")
 BASE_URL = f"http://127.0.0.1:{PORT}"
 
@@ -83,19 +86,16 @@ def run_cicd():
     try:
         project_path = get_project_folder()
 
-        # Generate docker
         subprocess.run(
-            ["curl", "-X", "POST",  f"{BASE_URL}/generate-docker/"],
+            ["curl", "-X", "POST", f"{BASE_URL}/generate-docker/"],
             check=False
         )
 
-        # Build docker
         subprocess.run(
             ["docker", "build", "-t", "ai-devops", project_path],
             check=True
         )
 
-        # Stop old container
         subprocess.run(
             ["docker", "stop", "ai-devops"],
             stderr=subprocess.DEVNULL
@@ -106,7 +106,6 @@ def run_cicd():
             stderr=subprocess.DEVNULL
         )
 
-        # Run container
         subprocess.run(
             [
                 "docker", "run", "-d",
@@ -135,19 +134,22 @@ async def upload_zip(file: UploadFile = File(...)):
 
     extract_zip(file_path)
 
-    # AUTO CICD (Background)
     threading.Thread(target=run_cicd).start()
 
     return {"message": "ZIP uploaded and deployment started"}
 
 
 # --------------------------------
-# Detect Project
+# Home
 # --------------------------------
 @app.get("/")
 def home():
     return {"message": "AI DevOps Assistant Backend Running"}
 
+
+# --------------------------------
+# Detect Project
+# --------------------------------
 @app.get("/detect-project/")
 def detect():
     project_path = get_project_folder()
@@ -175,11 +177,9 @@ async def generate_docker(
 
     project_path = get_project_folder()
 
-    # Auto detect project
     if not project_type:
         project_type = detect_project(project_path)
 
-    # Check package.json for scripts
     package_json_path = os.path.join(project_path, "package.json")
     start_command = 'CMD ["npm","start"]'
 
@@ -190,7 +190,6 @@ async def generate_docker(
 
         scripts = package_data.get("scripts", {})
 
-        # Detect Vite / React
         if "dev" in scripts and "vite" in scripts.get("dev", ""):
             start_command = 'CMD ["npm","run","dev","--","--host"]'
 
@@ -198,13 +197,13 @@ async def generate_docker(
             start_command = 'CMD ["npm","start"]'
 
         else:
-            # fallback for static build
-            start_command = 'RUN npm run build\nRUN npm install -g serve\nCMD ["serve","-s","dist","-l","3000"]'
+            start_command = """
+RUN npm run build
+RUN npm install -g serve
+CMD ["serve","-s","dist","-l","3000"]
+"""
 
-
-    response = client.generate_content(
-        model="gemini-2.5-flash",
-        contents=f"""
+    response = model.generate_content(f"""
 Generate a production-ready Dockerfile for a {project_type} project.
 
 Rules:
@@ -219,23 +218,19 @@ Use this start command:
 {start_command}
 
 Return only Dockerfile.
-"""
-    )
+""")
 
     docker_output = extract_text(response)
-    
 
     docker_output = docker_output.replace("```dockerfile", "")
     docker_output = docker_output.replace("```", "")
-    # Ensure container runs
+
     if "CMD" not in docker_output:
         docker_output += """
-
-    RUN npm run build
-    RUN npm install -g serve
-
-    CMD ["serve","-s","dist","-l","3000"]
-    """
+RUN npm run build
+RUN npm install -g serve
+CMD ["serve","-s","dist","-l","3000"]
+"""
 
     filename = os.path.join(project_path, "Dockerfile")
 
@@ -246,6 +241,7 @@ Return only Dockerfile.
         "response": docker_output,
         "saved_to": filename
     }
+
 
 # --------------------------------
 # Build Docker
@@ -309,14 +305,11 @@ async def analyze_log(file: UploadFile = File(...)):
     except:
         logs = content.decode("latin-1")
 
-    response = client.generate_content(
-        model="gemini-2.5-flash",
-        contents=f"""
+    response = model.generate_content(f"""
 Analyze these logs and explain errors:
 
 {logs}
-"""
-    )
+""")
 
     analysis = extract_text(response)
 
@@ -324,7 +317,7 @@ Analyze these logs and explain errors:
 
 
 # --------------------------------
-# DevOps Chat
+# Deploy Render
 # --------------------------------
 @app.post("/deploy-render/")
 def deploy_render():
@@ -337,13 +330,13 @@ def deploy_render():
     return result
 
 
-
+# --------------------------------
+# Chat
+# --------------------------------
 @app.post("/chat/")
 def chat(request: ChatRequest):
-    response = client.generate_content(
-        model="gemini-2.5-flash",
-        contents=request.message
-    )
+
+    response = model.generate_content(request.message)
 
     answer = extract_text(response)
 
