@@ -91,36 +91,42 @@ def run_cicd():
             check=False
         )
 
-        subprocess.run(
-            ["docker", "build", "-t", "ai-devops", project_path],
-            check=True
-        )
+        # Docker commands (disabled for Render)
+        # subprocess.run(
+        #     ["docker", "build", "-t", "ai-devops", project_path],
+        #     check=True
+        # )
 
-        subprocess.run(
-            ["docker", "stop", "ai-devops"],
-            stderr=subprocess.DEVNULL
-        )
+        # subprocess.run(
+        #     ["docker", "stop", "ai-devops"],
+        #     stderr=subprocess.DEVNULL
+        # )
 
-        subprocess.run(
-            ["docker", "rm", "ai-devops"],
-            stderr=subprocess.DEVNULL
-        )
+        # subprocess.run(
+        #     ["docker", "rm", "ai-devops"],
+        #     stderr=subprocess.DEVNULL
+        # )
 
-        subprocess.run(
-            [
-                "docker", "run", "-d",
-                "-p", "3001:3000",
-                "--name", "ai-devops",
-                "ai-devops"
-            ],
-            check=True
-        )
+        # subprocess.run(
+        #     [
+        #         "docker", "run", "-d",
+        #         "-p", "3001:3000",
+        #         "--name", "ai-devops",
+        #         "ai-devops"
+        #     ],
+        #     check=True
+        # )
+
+        # Push to GitHub
+        push_to_github(project_path)
+
+        # Deploy to Render
+        deploy_render()
 
         return "Full CI/CD completed"
 
     except Exception as e:
         return str(e)
-
 
 # --------------------------------
 # Upload ZIP
