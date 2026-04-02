@@ -142,6 +142,10 @@ async def upload_zip(file: UploadFile = File(...)):
 # --------------------------------
 # Detect Project
 # --------------------------------
+@app.get("/")
+def home():
+    return {"message": "AI DevOps Assistant Backend Running"}
+
 @app.get("/detect-project/")
 def detect():
     project_path = get_project_folder()
