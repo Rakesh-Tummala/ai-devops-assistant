@@ -86,42 +86,17 @@ def run_cicd():
     try:
         project_path = get_project_folder()
 
+        # Generate Dockerfile
         subprocess.run(
             ["curl", "-X", "POST", f"{BASE_URL}/generate-docker/"],
             check=False
         )
 
-        # Docker commands (disabled for Render)
-        # subprocess.run(
-        #     ["docker", "build", "-t", "ai-devops", project_path],
-        #     check=True
-        # )
-
-        # subprocess.run(
-        #     ["docker", "stop", "ai-devops"],
-        #     stderr=subprocess.DEVNULL
-        # )
-
-        # subprocess.run(
-        #     ["docker", "rm", "ai-devops"],
-        #     stderr=subprocess.DEVNULL
-        # )
-
-        # subprocess.run(
-        #     [
-        #         "docker", "run", "-d",
-        #         "-p", "3001:3000",
-        #         "--name", "ai-devops",
-        #         "ai-devops"
-        #     ],
-        #     check=True
-        # )
-
-        # Push to GitHub
+        # Push GitHub
         push_to_github(project_path)
 
-        # Deploy to Render
-        deploy_render()
+        # Deploy Render in background
+        threading.Thread(target=deploy_render).start()
 
         return "Full CI/CD completed"
 
