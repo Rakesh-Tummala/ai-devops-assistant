@@ -20,8 +20,10 @@ load_dotenv()
 # Gemini Setup
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel("gemini-2.5-flash")
+
 deployment_status = "Idle"
 deployment_logs = []
+
 # FastAPI app
 app = FastAPI()
 
@@ -87,6 +89,10 @@ def run_cicd():
     global deployment_status, deployment_logs
 
     try:
+        # ✅ FIX: Configure Git for Render environment
+        subprocess.run(["git", "config", "--global", "user.email", "render@ai-devops.com"])
+        subprocess.run(["git", "config", "--global", "user.name", "AI DevOps Bot"])
+
         project_path = get_project_folder()
 
         deployment_status = "Generating Dockerfile"
@@ -116,6 +122,7 @@ def run_cicd():
         deployment_status = "Error"
         deployment_logs.append(str(e))
         return str(e)
+
 
 # --------------------------------
 # Upload ZIP
@@ -154,7 +161,7 @@ def detect():
 
 
 # --------------------------------
-# Generate Dockerfile
+# Deployment Status
 # --------------------------------
 @app.get("/deployment-status/")
 def deployment_status_api():
@@ -163,6 +170,10 @@ def deployment_status_api():
         "logs": deployment_logs
     }
 
+
+# --------------------------------
+# Generate Dockerfile
+# --------------------------------
 @app.post("/generate-docker/")
 async def generate_docker(
     file: UploadFile = File(None),
@@ -243,47 +254,6 @@ CMD ["serve","-s","dist","-l","3000"]
         "response": docker_output,
         "saved_to": filename
     }
-
-
-# --------------------------------
-# Build Docker
-# --------------------------------
-@app.post("/build-docker/")
-def build_docker():
-    project_path = os.path.abspath(get_project_folder())
-
-    for root, dirs, files in os.walk(project_path):
-        if "Dockerfile" in files:
-            project_path = root
-            break
-
-    try:
-        subprocess.run(
-            ["docker", "build", "-t", "ai-devops", project_path],
-            check=True
-        )
-
-        return {"message": "Docker image built successfully"}
-
-    except subprocess.CalledProcessError as e:
-        return {"error": str(e)}
-
-
-# --------------------------------
-# Run Docker
-# --------------------------------
-@app.post("/run-docker/")
-def run_docker():
-    try:
-        subprocess.run(
-            ["docker", "run", "-d", "-p", "3001:3000", "ai-devops"],
-            check=True
-        )
-
-        return {"message": "Docker container running"}
-
-    except subprocess.CalledProcessError as e:
-        return {"error": str(e)}
 
 
 # --------------------------------
