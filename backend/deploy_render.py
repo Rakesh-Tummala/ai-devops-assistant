@@ -22,7 +22,12 @@ def get_owner_id():
 
     response = requests.get(url, headers=headers)
 
-    data = response.json()
+    try:
+        data = response.json()
+    except:
+        print("❌ Failed to parse owner response")
+        print(response.text)
+        raise Exception("Render owner API failed")
 
     print("👤 Owners Response:", data)
 
@@ -54,11 +59,10 @@ def deploy_to_render(service_name="ai-deploy", docker_image=None):
 
     owner_id = get_owner_id()
 
-    # 🔥 Auto unique name
+    # Unique service name
     unique_name = f"{service_name}-{int(time.time())}"
 
-    # Detect start command (for now using repo root)
-    project_path = "."  
+    project_path = "."
     start_command = detect_start_command(project_path)
 
     url = "https://api.render.com/v1/services"
@@ -94,8 +98,16 @@ def deploy_to_render(service_name="ai-deploy", docker_image=None):
     print("\n🔥 Render Response:")
     print(response.text)
 
+    # Safe JSON handling
+    try:
+        response_data = response.json()
+    except:
+        response_data = {
+            "raw_response": response.text
+        }
+
     return {
         "status_code": response.status_code,
-        "response": response.text,
+        "response": response_data,
         "service_name": unique_name
     }
