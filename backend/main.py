@@ -20,7 +20,8 @@ load_dotenv()
 # Gemini Setup
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel("gemini-2.5-flash")
-
+deployment_status = "Idle"
+deployment_logs = []
 # FastAPI app
 app = FastAPI()
 
@@ -83,24 +84,37 @@ def get_project_folder():
 # CI/CD
 # --------------------------------
 def run_cicd():
+    global deployment_status, deployment_logs
+
     try:
         project_path = get_project_folder()
 
-        # Generate Dockerfile
+        deployment_status = "Generating Dockerfile"
+        deployment_logs.append("Generating Dockerfile")
+
         subprocess.run(
             ["curl", "-X", "POST", f"{BASE_URL}/generate-docker/"],
             check=False
         )
 
-        # Push GitHub
+        deployment_status = "Pushing to GitHub"
+        deployment_logs.append("Pushing to GitHub")
+
         push_to_github(project_path)
 
-        # Deploy Render in background
-        threading.Thread(target=deploy_render).start()
+        deployment_status = "Deploying to Render"
+        deployment_logs.append("Deploying to Render")
+
+        deploy_render()
+
+        deployment_status = "Deployment Complete"
+        deployment_logs.append("Deployment Complete")
 
         return "Full CI/CD completed"
 
     except Exception as e:
+        deployment_status = "Error"
+        deployment_logs.append(str(e))
         return str(e)
 
 # --------------------------------
@@ -142,6 +156,13 @@ def detect():
 # --------------------------------
 # Generate Dockerfile
 # --------------------------------
+@app.get("/deployment-status/")
+def deployment_status_api():
+    return {
+        "status": deployment_status,
+        "logs": deployment_logs
+    }
+
 @app.post("/generate-docker/")
 async def generate_docker(
     file: UploadFile = File(None),
