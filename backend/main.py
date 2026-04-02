@@ -25,6 +25,8 @@ app = FastAPI()
 # Create folders
 os.makedirs("generated", exist_ok=True)
 os.makedirs("projects", exist_ok=True)
+PORT = os.getenv("PORT", "10000")
+BASE_URL = f"http://127.0.0.1:{PORT}"
 
 # CORS
 app.add_middleware(
@@ -83,7 +85,7 @@ def run_cicd():
 
         # Generate docker
         subprocess.run(
-            ["curl", "-X", "POST", "http://localhost:8000/generate-docker/"],
+            ["curl", "-X", "POST",  f"{BASE_URL}/generate-docker/"],
             check=False
         )
 
