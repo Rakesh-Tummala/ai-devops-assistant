@@ -100,7 +100,7 @@ def run_cicd():
         deployment_status = "Pushing to GitHub"
         deployment_logs.append("Pushing to GitHub")
 
-        push_to_github(project_path)
+        push_to_github()
 
         deployment_status = "Deploying to Render"
         deployment_logs.append("Deploying to Render")
