@@ -263,9 +263,8 @@ def generate_docker():
 
         docker = """FROM node:lts-alpine
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
 COPY . .
+RUN npm install
 RUN npm run build
 RUN npm install -g serve
 EXPOSE 10000
@@ -290,9 +289,12 @@ EXPOSE 10000
 CMD ["nginx","-g","daemon off;"]
 """
 
-    with open(os.path.join(project_path, "Dockerfile"), "w") as f:
+    docker_path = os.path.join(project_path, "Dockerfile")
+
+    with open(docker_path, "w") as f:
         f.write(docker)
 
+    print("Dockerfile created at:", docker_path)
 
 # -----------------------
 # Chat
