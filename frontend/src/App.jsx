@@ -8,8 +8,8 @@ import {
   FaCloud
 } from "react-icons/fa";
 
-// Change this when deploying frontend later
-const API_URL = "http://localhost:8000";
+// Your deployed backend
+const API_URL = "https://ai-devops-assistant-backend-mvrs.onrender.com";
 
 function App() {
 
@@ -21,6 +21,13 @@ function App() {
   const [logs, setLogs] = useState([]);
   const [liveUrl, setLiveUrl] = useState("");
 
+  // Reset state on load
+  useEffect(() => {
+
+    axios.post(`${API_URL}/reset-deployment/`);
+
+  }, []);
+
   // Poll deployment status
   useEffect(() => {
 
@@ -30,17 +37,20 @@ function App() {
         .get(`${API_URL}/deployment-status/`)
         .then((res) => {
 
-          setDeployStatus(res.data.status || "Idle");
-          setLogs(res.data.logs || []);
+          if (res.data.status) {
+            setDeployStatus(res.data.status);
+          }
+
+          if (res.data.logs) {
+            setLogs(res.data.logs);
+          }
 
           if (res.data.url) {
             setLiveUrl(res.data.url);
           }
 
         })
-        .catch((err) => {
-          console.log("Polling error:", err.message);
-        });
+        .catch(() => {});
 
     }, 2000);
 
@@ -62,10 +72,12 @@ function App() {
     try {
 
       setLoading(true);
-      setStatus("Starting deployment...");
-      setLiveUrl("");
 
-      console.log("Uploading file...");
+      // Reset UI before deploy
+      setLogs([]);
+      setLiveUrl("");
+      setDeployStatus("Starting Deployment...");
+      setStatus("Starting deployment...");
 
       const response = await axios.post(
         `${API_URL}/upload-zip/`,
@@ -77,14 +89,11 @@ function App() {
         }
       );
 
-      console.log("Response:", response.data);
-
       setStatus(response.data.message || "Deployment started");
 
     } catch (error) {
 
-      console.error("Deploy error:", error);
-
+      console.error(error);
       setStatus("Deployment Failed");
 
     } finally {
@@ -213,7 +222,7 @@ function App() {
 
         {/* Live URL */}
 
-        {liveUrl && liveUrl !== "Deployment started..." && (
+        {liveUrl && (
           <div>
 
             <h2 className="font-semibold mb-2">
