@@ -149,12 +149,14 @@ def deploy_render_logic():
         repo_url=repo_url
     )
 
+    if "service" not in result:
+        raise Exception(f"Render Error: {result}")
+
     service_id = result["service"]["id"]
 
     url = wait_for_live_url(service_id)
 
     return url
-
 
 # -----------------------
 # CI/CD
