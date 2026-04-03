@@ -118,7 +118,17 @@ def root():
 
                 print("✅ Root route added:", file_path)
                 break
+deploy_status = "Idle"
+logs = []
+live_url = ""
 
+@app.post("/reset-deployment/")
+def reset_deployment():
+    global deploy_status, logs, live_url
+    deploy_status = "Idle"
+    logs = []
+    live_url = ""
+    return {"message": "reset done"}
 
 # --------------------------------
 # Wait for Live URL
