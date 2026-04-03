@@ -272,7 +272,7 @@ CMD ["serve", "-s", "dist", "-l", "10000"]
 """
 
     # -------------------------
-    # PYTHON PROJECT
+    # PYTHON / FASTAPI PROJECT
     # -------------------------
     elif project_type in ["python", "fastapi"]:
 
@@ -293,9 +293,9 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
 """
 
     # -------------------------
-    # NODE PROJECT
+    # NODE / EXPRESS PROJECT
     # -------------------------
-    else:
+    elif os.path.exists(package_json_path):
 
         docker_output = """
 FROM node:lts-alpine
@@ -313,17 +313,33 @@ EXPOSE 10000
 CMD ["npm", "start"]
 """
 
+    # -------------------------
+    # FALLBACK (STATIC SITE)
+    # -------------------------
+    else:
+
+        docker_output = """
+FROM nginx:alpine
+
+COPY . /usr/share/nginx/html
+
+EXPOSE 10000
+
+CMD ["nginx", "-g", "daemon off;"]
+"""
+
     filename = os.path.join(project_path, "Dockerfile")
 
     with open(filename, "w") as f:
         f.write(docker_output)
 
+    print("✅ Dockerfile generated for:", project_type)
+
     return {
         "response": docker_output,
-        "saved_to": filename
+        "saved_to": filename,
+        "project_type": project_type
     }
-
-
 # --------------------------------
 # Deploy Render
 # --------------------------------
