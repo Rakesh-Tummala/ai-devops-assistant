@@ -1,5 +1,3 @@
-# (FULL CLEAN FINAL VERSION)
-
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 import os
@@ -31,7 +29,9 @@ os.makedirs("projects", exist_ok=True)
 
 PORT = os.getenv("PORT", "10000")
 
+# -----------------------
 # CORS
+# -----------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,6 +39,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # -----------------------
 # Models
@@ -58,11 +59,14 @@ def extract_text(response):
 
 
 def get_project_folder():
-    folders = os.listdir("projects")
+
+    folders = sorted(os.listdir("projects"), reverse=True)
+
     for folder in folders:
         path = os.path.join("projects", folder)
         if os.path.isdir(path):
             return path
+
     return "projects"
 
 
@@ -138,7 +142,7 @@ def wait_for_live_url(service_id):
 # -----------------------
 def deploy_render_logic():
 
-    repo_url = "https://github.com/Rakesh-Tummala/ai-devops-assistant"
+    repo_url = push_to_github()
 
     result = deploy_to_render(
         service_name="ai-deploy-app",
@@ -283,7 +287,7 @@ EXPOSE 10000
 CMD ["nginx","-g","daemon off;"]
 """
 
-    with open(os.path.join(project_path, "Dockerfile"), "w") as f:
+    with open("Dockerfile", "w") as f:
         f.write(docker)
 
 
