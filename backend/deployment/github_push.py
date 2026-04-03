@@ -17,26 +17,8 @@ def get_project_folder():
 def push_to_github():
 
     try:
-        project_path = get_project_folder()
-        repo_path = "repo"
+        repo_path = get_project_folder()
 
-        # Clean repo folder
-        if os.path.exists(repo_path):
-            shutil.rmtree(repo_path)
-
-        os.makedirs(repo_path, exist_ok=True)
-
-        # Copy project to repo root
-        for item in os.listdir(project_path):
-            s = os.path.join(project_path, item)
-            d = os.path.join(repo_path, item)
-
-            if os.path.isdir(s):
-                shutil.copytree(s, d)
-            else:
-                shutil.copy2(s, d)
-
-        # Git init
         subprocess.run(["git", "init"], cwd=repo_path)
 
         subprocess.run(
@@ -49,6 +31,13 @@ def push_to_github():
             cwd=repo_path
         )
 
+        # IMPORTANT FIX
+        subprocess.run(
+            ["git", "rm", "-r", "--cached", "."],
+            cwd=repo_path,
+            check=False
+        )
+
         subprocess.run(["git", "add", "."], cwd=repo_path)
 
         subprocess.run(
@@ -58,10 +47,7 @@ def push_to_github():
 
         repo_url = "https://github.com/Rakesh-Tummala/ai-devops-deploy.git"
 
-        subprocess.run(
-            ["git", "branch", "-M", "main"],
-            cwd=repo_path
-        )
+        subprocess.run(["git", "branch", "-M", "main"], cwd=repo_path)
 
         subprocess.run(
             ["git", "remote", "remove", "origin"],
