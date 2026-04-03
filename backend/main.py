@@ -23,6 +23,7 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 
 deployment_status = "Idle"
 deployment_logs = []
+deployment_url = None
 
 # FastAPI app
 app = FastAPI()
@@ -83,17 +84,59 @@ def get_project_folder():
 
 
 # --------------------------------
+# Auto Add Root Route
+# --------------------------------
+def add_root_route():
+    project_path = get_project_folder()
+
+    possible_files = [
+        "main.py",
+        "app.py",
+        "app/main.py"
+    ]
+
+    for file in possible_files:
+        file_path = os.path.join(project_path, file)
+
+        if os.path.exists(file_path):
+
+            with open(file_path, "r") as f:
+                content = f.read()
+
+            if "@app.get(\"/\")" not in content:
+
+                route = """
+
+@app.get("/")
+def root():
+    return {"message": "App Running"}
+"""
+
+                with open(file_path, "a") as f:
+                    f.write(route)
+
+                print("✅ Root route added:", file_path)
+
+                break
+
+
+# --------------------------------
 # CI/CD
 # --------------------------------
 def run_cicd():
     global deployment_status, deployment_logs
 
     try:
-        # ✅ FIX: Configure Git for Render environment
-        subprocess.run(["git", "config", "--global", "user.email", "render@ai-devops.com"])
-        subprocess.run(["git", "config", "--global", "user.name", "AI DevOps Bot"])
+        deployment_logs.clear()
+        deployment_status = "Starting Deployment"
+        deployment_logs.append("Starting Deployment")
 
-        project_path = get_project_folder()
+        subprocess.run(
+            ["git", "config", "--global", "user.email", "render@ai-devops.com"]
+        )
+        subprocess.run(
+            ["git", "config", "--global", "user.name", "AI DevOps Bot"]
+        )
 
         deployment_status = "Generating Dockerfile"
         deployment_logs.append("Generating Dockerfile")
@@ -136,6 +179,9 @@ async def upload_zip(file: UploadFile = File(...)):
 
     extract_zip(file_path)
 
+    # auto add root route
+    add_root_route()
+
     threading.Thread(target=run_cicd).start()
 
     return {"message": "ZIP uploaded and deployment started"}
@@ -146,7 +192,12 @@ async def upload_zip(file: UploadFile = File(...)):
 # --------------------------------
 @app.get("/")
 def home():
-    return {"message": "AI DevOps Assistant Backend Running"}
+    return {
+        "service": "AI DevOps Deployment",
+        "status": "Live",
+        "message": "Deployment Successful",
+        "docs": "/docs"
+    }
 
 
 # --------------------------------
@@ -167,13 +218,13 @@ def detect():
 def deployment_status_api():
     return {
         "status": deployment_status,
-        "logs": deployment_logs
+        "logs": deployment_logs,
+        "url": deployment_url
     }
 
 
 # --------------------------------
 # Generate Dockerfile
-# --------------------------------
 @app.post("/generate-docker/")
 async def generate_docker(
     file: UploadFile = File(None),
@@ -194,55 +245,72 @@ async def generate_docker(
         project_type = detect_project(project_path)
 
     package_json_path = os.path.join(project_path, "package.json")
-    start_command = 'CMD ["npm","start"]'
 
-    if os.path.exists(package_json_path):
-        import json
-        with open(package_json_path) as f:
-            package_data = json.load(f)
+    # -------------------------
+    # FRONTEND PROJECT (React/Vite)
+    # -------------------------
+    if project_type in ["react", "vite", "frontend"]:
 
-        scripts = package_data.get("scripts", {})
+        docker_output = """
+FROM node:lts-alpine
 
-        if "dev" in scripts and "vite" in scripts.get("dev", ""):
-            start_command = 'CMD ["npm","run","dev","--","--host"]'
+WORKDIR /app
 
-        elif "start" in scripts:
-            start_command = 'CMD ["npm","start"]'
+COPY package*.json ./
 
-        else:
-            start_command = """
+RUN npm install
+
+COPY . .
+
 RUN npm run build
+
 RUN npm install -g serve
-CMD ["serve","-s","dist","-l","3000"]
+
+EXPOSE 10000
+
+CMD ["serve", "-s", "dist", "-l", "10000"]
 """
 
-    response = model.generate_content(f"""
-Generate a production-ready Dockerfile for a {project_type} project.
+    # -------------------------
+    # PYTHON PROJECT
+    # -------------------------
+    elif project_type in ["python", "fastapi"]:
 
-Rules:
-- Use node:lts-alpine
-- Set WORKDIR /app
-- Copy package.json first
-- Run npm install
-- Copy rest of files
-- Expose port 3000
+        docker_output = """
+FROM python:3.11-slim
 
-Use this start command:
-{start_command}
+WORKDIR /app
 
-Return only Dockerfile.
-""")
+COPY requirements.txt .
 
-    docker_output = extract_text(response)
+RUN pip install --no-cache-dir -r requirements.txt
 
-    docker_output = docker_output.replace("```dockerfile", "")
-    docker_output = docker_output.replace("```", "")
+COPY . .
 
-    if "CMD" not in docker_output:
-        docker_output += """
-RUN npm run build
-RUN npm install -g serve
-CMD ["serve","-s","dist","-l","3000"]
+EXPOSE 10000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
+"""
+
+    # -------------------------
+    # NODE PROJECT
+    # -------------------------
+    else:
+
+        docker_output = """
+FROM node:lts-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+EXPOSE 10000
+
+CMD ["npm", "start"]
 """
 
     filename = os.path.join(project_path, "Dockerfile")
@@ -257,49 +325,38 @@ CMD ["serve","-s","dist","-l","3000"]
 
 
 # --------------------------------
-# CI/CD Endpoint
-# --------------------------------
-@app.post("/cicd/")
-def cicd():
-    threading.Thread(target=run_cicd).start()
-    return {"message": "CI/CD started"}
-
-
-# --------------------------------
-# Log Analyzer
-# --------------------------------
-@app.post("/analyze-log/")
-async def analyze_log(file: UploadFile = File(...)):
-    content = await file.read()
-
-    try:
-        logs = content.decode("utf-8")
-    except:
-        logs = content.decode("latin-1")
-
-    response = model.generate_content(f"""
-Analyze these logs and explain errors:
-
-{logs}
-""")
-
-    analysis = extract_text(response)
-
-    return {"analysis": analysis}
-
-
-# --------------------------------
 # Deploy Render
 # --------------------------------
 @app.post("/deploy-render/")
 def deploy_render():
 
+    global deployment_url
+
     service_name = "ai-deploy-app"
-    docker_image = "docker.io/rakeshtummala2005/ai-devops-app:latest"
 
-    result = deploy_to_render(service_name, docker_image)
+    repo_url = push_to_github()
 
-    return result
+    result = deploy_to_render(service_name, repo_url)
+
+    url = None
+
+    try:
+        url = result["service"]["serviceDetails"]["url"]
+    except:
+        try:
+            url = result["service"]["url"]
+        except:
+            pass
+
+    if not url:
+        url = "Deployment started..."
+
+    deployment_url = url
+
+    return {
+        "status": "success",
+        "url": url
+    }
 
 
 # --------------------------------

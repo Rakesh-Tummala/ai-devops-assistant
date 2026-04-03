@@ -48,7 +48,6 @@ def detect_start_command(project_path):
     if os.path.exists(f"{project_path}/app/main.py"):
         return "uvicorn app.main:app --host 0.0.0.0 --port 10000"
 
-    # Default fallback
     return "uvicorn main:app --host 0.0.0.0 --port 10000"
 
 
@@ -59,7 +58,6 @@ def deploy_to_render(service_name="ai-deploy", docker_image=None):
 
     owner_id = get_owner_id()
 
-    # Unique service name
     unique_name = f"{service_name}-{int(time.time())}"
 
     project_path = "."
@@ -98,16 +96,11 @@ def deploy_to_render(service_name="ai-deploy", docker_image=None):
     print("\n🔥 Render Response:")
     print(response.text)
 
-    # Safe JSON handling
+    # Return actual JSON (IMPORTANT FIX)
     try:
-        response_data = response.json()
+        return response.json()
     except:
-        response_data = {
-            "raw_response": response.text
+        return {
+            "error": "Failed to parse response",
+            "raw": response.text
         }
-
-    return {
-        "status_code": response.status_code,
-        "response": response_data,
-        "service_name": unique_name
-    }
