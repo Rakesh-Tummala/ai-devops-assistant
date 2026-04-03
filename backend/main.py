@@ -353,6 +353,14 @@ def deploy_render():
 # --------------------------------
 # Chat API
 # --------------------------------
+@app.post("/reset-deployment/")
+def reset_deployment():
+    global deploy_status, logs, live_url
+    deploy_status = "Idle"
+    logs = []
+    live_url = ""
+    return {"message": "Reset successful"}
+
 @app.post("/chat/")
 def chat(request: ChatRequest):
 
