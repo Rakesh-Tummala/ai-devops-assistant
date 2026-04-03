@@ -314,7 +314,7 @@ EXPOSE 10000
 CMD ["serve", "-s", "dist", "-l", "10000"]
 """
 
-    elif project_type in ["python", "fastapi"]:
+    elif os.path.exists(os.path.join(project_path, "requirements.txt")):
 
         docker_output = """
     FROM python:3.11-slim
