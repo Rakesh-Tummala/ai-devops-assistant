@@ -8,9 +8,6 @@ load_dotenv()
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
 
 
-# -------------------------------
-# Get Owner ID
-# -------------------------------
 def get_owner_id():
 
     url = "https://api.render.com/v1/owners"
@@ -22,21 +19,11 @@ def get_owner_id():
 
     response = requests.get(url, headers=headers)
 
-    try:
-        data = response.json()
-    except:
-        print("❌ Failed to parse owner response")
-        print(response.text)
-        raise Exception("Render owner API failed")
-
-    print("👤 Owners Response:", data)
+    data = response.json()
 
     return data[0]["owner"]["id"]
 
 
-# -------------------------------
-# Deploy to Render
-# -------------------------------
 def deploy_to_render(service_name="ai-deploy", repo_url=None):
 
     owner_id = get_owner_id()
@@ -55,7 +42,7 @@ def deploy_to_render(service_name="ai-deploy", repo_url=None):
         "type": "web_service",
         "name": unique_name,
         "ownerId": owner_id,
-        "repo": repo_url,   # IMPORTANT FIX
+        "repo": repo_url,
         "branch": "main",
         "serviceDetails": {
             "runtime": "docker",
@@ -64,13 +51,7 @@ def deploy_to_render(service_name="ai-deploy", repo_url=None):
         }
     }
 
-    print("\n🚀 Deploy Payload:")
-    print(payload)
-
     response = requests.post(url, headers=headers, json=payload)
-
-    print("\n🔥 Render Response:")
-    print(response.text)
 
     try:
         return response.json()
@@ -79,3 +60,15 @@ def deploy_to_render(service_name="ai-deploy", repo_url=None):
             "error": "Failed to parse response",
             "raw": response.text
         }
+def get_service(service_id):
+
+    url = f"https://api.render.com/v1/services/{service_id}"
+
+    headers = {
+        "Authorization": f"Bearer {RENDER_API_KEY}",
+        "Accept": "application/json"
+    }
+
+    response = requests.get(url, headers=headers)
+
+    return response.json()

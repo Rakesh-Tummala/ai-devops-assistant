@@ -1,17 +1,18 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 import os
+import time
 import subprocess
 from dotenv import load_dotenv
 import google.generativeai as genai
 from fastapi.middleware.cors import CORSMiddleware
 import threading
-from deploy_render import deploy_to_render
+
+from deploy_render import deploy_to_render, get_service
 
 # Local Imports
 from utils.zip_handler import extract_zip
 from utils.project_detector import detect_project
-from deployment.render import deploy_render
 from deployment.github_push import push_to_github
 
 # Load environment variables
@@ -53,7 +54,7 @@ class ChatRequest(BaseModel):
 
 
 # --------------------------------
-# Helper function
+# Extract Gemini Response
 # --------------------------------
 def extract_text(response):
     try:
@@ -116,24 +117,77 @@ def root():
                     f.write(route)
 
                 print("✅ Root route added:", file_path)
-
                 break
 
 
 # --------------------------------
-# CI/CD
+# Wait for Live URL
+# --------------------------------
+def wait_for_live_url(service_id):
+
+    for _ in range(60):
+
+        service_info = get_service(service_id)
+
+        try:
+            service = service_info.get("service", {})
+
+            url = service.get("serviceDetails", {}).get("url")
+
+            if not url:
+                slug = service.get("slug")
+                if slug:
+                    url = f"https://{slug}.onrender.com"
+
+            if url:
+                return url
+
+        except Exception as e:
+            print("Error:", e)
+
+        time.sleep(5)
+
+    return None
+
+
+# --------------------------------
+# Deploy Logic
+# --------------------------------
+def deploy_render_logic():
+
+    repo_url = "https://github.com/Rakesh-Tummala/ai-devops-assistant"
+
+    result = deploy_to_render(
+        service_name="ai-deploy-app",
+        repo_url=repo_url
+    )
+
+    service_id = result.get("service", {}).get("id")
+
+    if not service_id:
+        raise Exception("Failed to create Render service")
+
+    url = wait_for_live_url(service_id)
+
+    return url
+
+
+# --------------------------------
+# CI/CD Pipeline
 # --------------------------------
 def run_cicd():
-    global deployment_status, deployment_logs
+    global deployment_status, deployment_logs, deployment_url
 
     try:
         deployment_logs.clear()
+
         deployment_status = "Starting Deployment"
         deployment_logs.append("Starting Deployment")
 
         subprocess.run(
             ["git", "config", "--global", "user.email", "render@ai-devops.com"]
         )
+
         subprocess.run(
             ["git", "config", "--global", "user.name", "AI DevOps Bot"]
         )
@@ -154,17 +208,16 @@ def run_cicd():
         deployment_status = "Deploying to Render"
         deployment_logs.append("Deploying to Render")
 
-        deploy_render()
+        deployment_logs.append("Waiting for Live URL...")
+
+        deployment_url = deploy_render_logic()
 
         deployment_status = "Deployment Complete"
         deployment_logs.append("Deployment Complete")
 
-        return "Full CI/CD completed"
-
     except Exception as e:
         deployment_status = "Error"
         deployment_logs.append(str(e))
-        return str(e)
 
 
 # --------------------------------
@@ -179,7 +232,6 @@ async def upload_zip(file: UploadFile = File(...)):
 
     extract_zip(file_path)
 
-    # auto add root route
     add_root_route()
 
     threading.Thread(target=run_cicd).start()
@@ -195,20 +247,8 @@ def home():
     return {
         "service": "AI DevOps Deployment",
         "status": "Live",
-        "message": "Deployment Successful",
         "docs": "/docs"
     }
-
-
-# --------------------------------
-# Detect Project
-# --------------------------------
-@app.get("/detect-project/")
-def detect():
-    project_path = get_project_folder()
-    project_type = detect_project(project_path)
-
-    return {"project_type": project_type}
 
 
 # --------------------------------
@@ -224,107 +264,64 @@ def deployment_status_api():
 
 
 # --------------------------------
+# Detect Project
+# --------------------------------
+@app.get("/detect-project/")
+def detect():
+    project_path = get_project_folder()
+    project_type = detect_project(project_path)
+
+    return {"project_type": project_type}
+
+
+# --------------------------------
 # Generate Dockerfile
+# --------------------------------
 @app.post("/generate-docker/")
 async def generate_docker(
     file: UploadFile = File(None),
     project_type: str = Form(None)
 ):
 
-    if file:
-        file_path = f"projects/{file.filename}"
-
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
-
-        extract_zip(file_path)
-
     project_path = get_project_folder()
 
     if not project_type:
         project_type = detect_project(project_path)
 
-    package_json_path = os.path.join(project_path, "package.json")
+    docker_output = ""
 
-    # -------------------------
-    # FRONTEND PROJECT (React/Vite)
-    # -------------------------
     if project_type in ["react", "vite", "frontend"]:
 
         docker_output = """
 FROM node:lts-alpine
-
 WORKDIR /app
-
 COPY package*.json ./
-
 RUN npm install
-
 COPY . .
-
 RUN npm run build
-
 RUN npm install -g serve
-
 EXPOSE 10000
-
 CMD ["serve", "-s", "dist", "-l", "10000"]
 """
 
-    # -------------------------
-    # PYTHON / FASTAPI PROJECT
-    # -------------------------
     elif project_type in ["python", "fastapi"]:
 
         docker_output = """
 FROM python:3.11-slim
-
 WORKDIR /app
-
 COPY requirements.txt .
-
 RUN pip install --no-cache-dir -r requirements.txt
-
 COPY . .
-
 EXPOSE 10000
-
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
 """
 
-    # -------------------------
-    # NODE / EXPRESS PROJECT
-    # -------------------------
-    elif os.path.exists(package_json_path):
-
-        docker_output = """
-FROM node:lts-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-
-RUN npm install
-
-COPY . .
-
-EXPOSE 10000
-
-CMD ["npm", "start"]
-"""
-
-    # -------------------------
-    # FALLBACK (STATIC SITE)
-    # -------------------------
     else:
 
         docker_output = """
 FROM nginx:alpine
-
 COPY . /usr/share/nginx/html
-
 EXPOSE 10000
-
 CMD ["nginx", "-g", "daemon off;"]
 """
 
@@ -333,50 +330,28 @@ CMD ["nginx", "-g", "daemon off;"]
     with open(filename, "w") as f:
         f.write(docker_output)
 
-    print("✅ Dockerfile generated for:", project_type)
-
     return {
-        "response": docker_output,
-        "saved_to": filename,
-        "project_type": project_type
+        "project_type": project_type,
+        "saved_to": filename
     }
+
+
 # --------------------------------
-# Deploy Render
+# Deploy API
 # --------------------------------
 @app.post("/deploy-render/")
 def deploy_render():
 
-    global deployment_url
-
-    service_name = "ai-deploy-app"
-
-    repo_url = push_to_github()
-
-    result = deploy_to_render(service_name, repo_url)
-
-    url = None
-
-    try:
-        url = result["service"]["serviceDetails"]["url"]
-    except:
-        try:
-            url = result["service"]["url"]
-        except:
-            pass
-
-    if not url:
-        url = "Deployment started..."
-
-    deployment_url = url
+    url = deploy_render_logic()
 
     return {
-        "status": "success",
+        "status": "Deploying",
         "url": url
     }
 
 
 # --------------------------------
-# Chat
+# Chat API
 # --------------------------------
 @app.post("/chat/")
 def chat(request: ChatRequest):
