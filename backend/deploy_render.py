@@ -35,33 +35,13 @@ def get_owner_id():
 
 
 # -------------------------------
-# Detect Start Command
-# -------------------------------
-def detect_start_command(project_path):
-
-    if os.path.exists(f"{project_path}/main.py"):
-        return "uvicorn main:app --host 0.0.0.0 --port 10000"
-
-    if os.path.exists(f"{project_path}/app.py"):
-        return "uvicorn app:app --host 0.0.0.0 --port 10000"
-
-    if os.path.exists(f"{project_path}/app/main.py"):
-        return "uvicorn app.main:app --host 0.0.0.0 --port 10000"
-
-    return "uvicorn main:app --host 0.0.0.0 --port 10000"
-
-
-# -------------------------------
 # Deploy to Render
 # -------------------------------
-def deploy_to_render(service_name="ai-deploy", docker_image=None):
+def deploy_to_render(service_name="ai-deploy", repo_url=None):
 
     owner_id = get_owner_id()
 
     unique_name = f"{service_name}-{int(time.time())}"
-
-    project_path = "."
-    start_command = detect_start_command(project_path)
 
     url = "https://api.render.com/v1/services"
 
@@ -75,14 +55,10 @@ def deploy_to_render(service_name="ai-deploy", docker_image=None):
         "type": "web_service",
         "name": unique_name,
         "ownerId": owner_id,
-        "repo": "https://github.com/render-examples/fastapi",
+        "repo": repo_url,   # IMPORTANT FIX
         "branch": "main",
         "serviceDetails": {
-            "runtime": "python",
-            "envSpecificDetails": {
-                "buildCommand": "pip install fastapi uvicorn",
-                "startCommand": start_command
-            },
+            "runtime": "docker",
             "region": "oregon",
             "plan": "free"
         }
@@ -96,7 +72,6 @@ def deploy_to_render(service_name="ai-deploy", docker_image=None):
     print("\n🔥 Render Response:")
     print(response.text)
 
-    # Return actual JSON (IMPORTANT FIX)
     try:
         return response.json()
     except:
