@@ -1,8 +1,6 @@
-fastapi
-uvicorn
-python-multipart
-requests
-python-dotenv
-google-generativeai
-docker
-PyGithub
+fastapi==0.109.2
+uvicorn==0.27.1
+python-multipart==0.0.22
+requests==2.32.3
+python-dotenv==1.2.2
+groq==1.6.0
