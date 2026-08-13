@@ -209,7 +209,9 @@ def wait_for_live_url(service_id):
         service = get_service(service_id)
 
         try:
-            url = service["service"]["serviceDetails"]["url"]
+            # GET /v1/services/{id} returns the service object directly —
+            # unlike the list endpoint, there's no "service" wrapper key.
+            url = service["serviceDetails"]["url"]
             if url:
                 return url
         except (KeyError, TypeError):
