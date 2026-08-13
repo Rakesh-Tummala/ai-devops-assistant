@@ -1,8 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Depends
 from pydantic import BaseModel
 from typing import Optional
 import os
 import re
+import secrets
 import stat
 import time
 from dotenv import load_dotenv
@@ -19,6 +20,19 @@ load_dotenv()
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+APP_ACCESS_KEY = os.getenv("APP_ACCESS_KEY")
+if not APP_ACCESS_KEY:
+    raise RuntimeError(
+        "APP_ACCESS_KEY must be set — this backend has no other access "
+        "control, and every route (including the deploy flow) would "
+        "otherwise be open to anyone who finds the URL."
+    )
+
+
+def require_access_key(x_app_key: str = Header(default="")):
+    if not secrets.compare_digest(x_app_key, APP_ACCESS_KEY):
+        raise HTTPException(401, "Invalid or missing access key")
 
 # Deployment state
 deployment_status = "Idle"
@@ -186,7 +200,7 @@ def root():
 # -----------------------
 # Reset Deployment
 # -----------------------
-@app.post("/reset-deployment/")
+@app.post("/reset-deployment/", dependencies=[Depends(require_access_key)])
 def reset_deployment():
     global deployment_status, deployment_logs, deployment_url
 
@@ -289,7 +303,7 @@ def run_cicd():
 # -----------------------
 # Upload ZIP
 # -----------------------
-@app.post("/upload-zip/")
+@app.post("/upload-zip/", dependencies=[Depends(require_access_key)])
 async def upload_zip(file: UploadFile = File(...)):
 
     filename = os.path.basename(file.filename or "")
@@ -379,7 +393,7 @@ def home():
 # -----------------------
 # Status
 # -----------------------
-@app.get("/deployment-status/")
+@app.get("/deployment-status/", dependencies=[Depends(require_access_key)])
 def deployment_status_api():
     return {
         "status": deployment_status,
@@ -391,7 +405,7 @@ def deployment_status_api():
 # -----------------------
 # Detect
 # -----------------------
-@app.get("/detect-project/")
+@app.get("/detect-project/", dependencies=[Depends(require_access_key)])
 def detect():
 
     project_path = get_project_folder()
@@ -458,7 +472,7 @@ CMD ["nginx","-g","daemon off;"]
 # -----------------------
 # Chat (Groq)
 # -----------------------
-@app.post("/chat/")
+@app.post("/chat/", dependencies=[Depends(require_access_key)])
 def chat(request: ChatRequest):
 
     system_prompt = (
@@ -475,7 +489,7 @@ def chat(request: ChatRequest):
 # -----------------------
 # Log Analyzer (Groq)
 # -----------------------
-@app.post("/analyze-log/")
+@app.post("/analyze-log/", dependencies=[Depends(require_access_key)])
 async def analyze_log(file: UploadFile = File(...)):
 
     log_text = await read_capped_text(file)
@@ -495,7 +509,7 @@ async def analyze_log(file: UploadFile = File(...)):
 # -----------------------
 # CI/CD Generator (Groq)
 # -----------------------
-@app.post("/generate-cicd/")
+@app.post("/generate-cicd/", dependencies=[Depends(require_access_key)])
 async def generate_cicd(
     project_type: str = Form(...),
     cicd_type: str = Form("github"),
@@ -531,7 +545,7 @@ async def generate_cicd(
 # -----------------------
 # Dockerfile Generator (Groq, standalone — separate from generate_docker() above)
 # -----------------------
-@app.post("/generate-docker/")
+@app.post("/generate-docker/", dependencies=[Depends(require_access_key)])
 async def generate_docker_ai(
     project_type: str = Form(...),
     file: Optional[UploadFile] = File(None),

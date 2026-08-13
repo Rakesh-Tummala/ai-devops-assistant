@@ -77,6 +77,39 @@ function ResultPanel({ output, loading }) {
 }
 
 function App() {
+  const [accessKey, setAccessKey] = useState(
+    () => localStorage.getItem("appAccessKey") || ""
+  );
+  const [keyInput, setKeyInput] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    axios.defaults.headers.common["X-App-Key"] = accessKey;
+  }, [accessKey]);
+
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      (res) => res,
+      (error) => {
+        if (error?.response?.status === 401) {
+          localStorage.removeItem("appAccessKey");
+          setAccessKey("");
+          setAuthError("Access key rejected — try again.");
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, []);
+
+  const unlock = (e) => {
+    e.preventDefault();
+    if (!keyInput.trim()) return;
+    localStorage.setItem("appAccessKey", keyInput.trim());
+    setAccessKey(keyInput.trim());
+    setAuthError("");
+  };
+
   const [activeTab, setActiveTab] = useState("deploy");
 
   // ---- Deploy tab state ----
@@ -109,11 +142,14 @@ function App() {
 
   // Reset deploy state on load
   useEffect(() => {
+    if (!accessKey) return;
     axios.post(`${API_URL}/reset-deployment/`);
-  }, []);
+  }, [accessKey]);
 
   // Poll deployment status
   useEffect(() => {
+    if (!accessKey) return;
+
     const interval = setInterval(() => {
       axios
         .get(`${API_URL}/deployment-status/`)
@@ -126,7 +162,7 @@ function App() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [accessKey]);
 
   const handleDeploy = async () => {
     if (!file) {
@@ -230,6 +266,42 @@ function App() {
     setActiveTab(key);
     setToolOutput("");
   };
+
+  if (!accessKey) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <form
+          onSubmit={unlock}
+          className="bg-gray-800 shadow-2xl rounded-2xl p-8 w-[380px]"
+        >
+          <h1 className="text-2xl font-bold mb-4 text-center flex items-center justify-center gap-2">
+            <FaRocket />
+            AI DevOps Assistant
+          </h1>
+          <p className="text-sm text-gray-400 mb-4 text-center">
+            Enter the access key to continue.
+          </p>
+          <input
+            type="password"
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            placeholder="Access key"
+            className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm mb-3"
+            autoFocus
+          />
+          {authError && (
+            <p className="text-sm text-red-400 mb-3">{authError}</p>
+          )}
+          <button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
+          >
+            Unlock
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center py-10">
