@@ -2,8 +2,8 @@ import zipfile
 import os
 import shutil
 
-MAX_MEMBERS = 5000
-MAX_EXTRACTED_BYTES = 200 * 1024 * 1024
+MAX_MEMBERS = 20000
+MAX_EXTRACTED_BYTES = 2000 * 1024 * 1024
 
 
 def _safe_member_path(name, dest_root):

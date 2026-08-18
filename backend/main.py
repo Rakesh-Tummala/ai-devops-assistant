@@ -76,7 +76,7 @@ class ChatRequest(BaseModel):
 # Upload / AI constraints
 # -----------------------
 SAFE_ZIP_NAME = re.compile(r"^[A-Za-z0-9_.-]+\.zip$")
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_UPLOAD_BYTES = 500 * 1024 * 1024
 MAX_TEXT_INPUT_BYTES = 2 * 1024 * 1024
 
 CICD_TARGETS = {
