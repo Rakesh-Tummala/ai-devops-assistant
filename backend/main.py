@@ -18,7 +18,7 @@ from deployment.github_push import push_to_github, scrub
 import shutil
 load_dotenv()
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 APP_ACCESS_KEY = os.getenv("APP_ACCESS_KEY")

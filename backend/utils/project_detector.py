@@ -11,15 +11,19 @@ def detect_project(project_path):
             with open(package_json) as f:
                 data = json.load(f)
 
-            dependencies = str(data).lower()
+            deps = {
+                **data.get("dependencies", {}),
+                **data.get("devDependencies", {}),
+            }
+            deps = {name.lower() for name in deps}
 
-            if "next" in dependencies:
+            if "next" in deps:
                 return "nextjs"
 
-            if "vite" in dependencies:
+            if "vite" in deps:
                 return "vite"
 
-            if "react" in dependencies:
+            if "react" in deps:
                 return "react"
 
             return "node"

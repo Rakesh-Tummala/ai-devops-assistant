@@ -66,7 +66,14 @@ def push_to_github():
         repo_url = f"https://github.com/{username}/{repo_name}.git"
 
         basic_auth = base64.b64encode(f"{username}:{token}".encode()).decode()
-        auth_header = f"http.extraheader=Authorization: Basic {basic_auth}"
+        # Passed via GIT_CONFIG_KEY/VALUE env vars rather than a "-c" argv
+        # entry, so the token doesn't appear in the process's command line
+        # (visible to `ps`/Task Manager/etc. for the process's lifetime).
+        auth_env = {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "http.extraheader",
+            "GIT_CONFIG_VALUE_0": f"Authorization: Basic {basic_auth}",
+        }
 
         # -------------------------
         # Git init
@@ -108,8 +115,9 @@ def push_to_github():
         # Push (token passed only for this command, never persisted)
         # -------------------------
         _run_git(
-            ["git", "-c", auth_header, "push", "-u", "origin", "main", "--force"],
+            ["git", "push", "-u", "origin", "main", "--force"],
             repo_path,
+            extra_env=auth_env,
         )
 
         # ✅ Return CLEAN repo URL (important for Render)

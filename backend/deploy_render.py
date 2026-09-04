@@ -19,7 +19,13 @@ def get_owner_id():
 
     response = requests.get(url, headers=headers)
 
+    if not response.ok:
+        raise Exception(f"Render API error fetching owner: {response.status_code} {response.text}")
+
     data = response.json()
+
+    if not data:
+        raise Exception("Render API returned no owners for this API key")
 
     return data[0]["owner"]["id"]
 
@@ -70,5 +76,8 @@ def get_service(service_id):
     }
 
     response = requests.get(url, headers=headers)
+
+    if not response.ok:
+        raise Exception(f"Render API error fetching service: {response.status_code} {response.text}")
 
     return response.json()

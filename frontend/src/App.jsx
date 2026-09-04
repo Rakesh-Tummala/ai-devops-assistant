@@ -140,12 +140,6 @@ function App() {
   const [dockerProjectType, setDockerProjectType] = useState("node");
   const [dockerFile, setDockerFile] = useState(null);
 
-  // Reset deploy state on load
-  useEffect(() => {
-    if (!accessKey) return;
-    axios.post(`${API_URL}/reset-deployment/`);
-  }, [accessKey]);
-
   // Poll deployment status
   useEffect(() => {
     if (!accessKey) return;

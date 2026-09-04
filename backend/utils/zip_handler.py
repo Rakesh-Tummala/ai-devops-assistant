@@ -43,19 +43,19 @@ def extract_zip(file_path, extract_to="projects"):
             with zip_ref.open(info) as src, open(target, "wb") as out:
                 shutil.copyfileobj(src, out)
 
-    # safer flatten logic
-    items = os.listdir(extract_to)
+    # Unwrap a single GitHub-style wrapper folder (e.g. "myproject-main/").
+    # Only do this when the zip root contains exactly one real entry and
+    # that entry is a directory — otherwise a normal project with several
+    # top-level folders (src/, public/, ...) would get them all merged
+    # into one directory, silently dropping same-named files.
+    ignored = {".git", "__MACOSX", ".github"}
+    items = [
+        item for item in os.listdir(extract_to)
+        if item not in ignored and not item.endswith(".zip")
+    ]
 
-    for item in items:
-        item_path = os.path.join(extract_to, item)
-
-        # skip zip file itself
-        if item.endswith(".zip"):
-            continue
-
-        # skip git folders
-        if item in [".git", "__MACOSX", ".github"]:
-            continue
+    if len(items) == 1:
+        item_path = os.path.join(extract_to, items[0])
 
         if os.path.isdir(item_path):
             for sub in os.listdir(item_path):
