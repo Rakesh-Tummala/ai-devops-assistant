@@ -22,7 +22,12 @@ def _safe_member_path(name, dest_root):
 def extract_zip(file_path, extract_to="projects"):
     os.makedirs(extract_to, exist_ok=True)
 
-    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+    try:
+        zip_ref = zipfile.ZipFile(file_path, 'r')
+    except zipfile.BadZipFile:
+        raise ValueError("Uploaded file is not a valid zip archive")
+
+    with zip_ref:
         infos = zip_ref.infolist()
 
         if len(infos) > MAX_MEMBERS:

@@ -2,22 +2,8 @@ import subprocess
 import os
 import base64
 import re
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-
-
-def get_project_folder():
-    folders = os.listdir("projects")
-
-    for folder in folders:
-        path = os.path.join("projects", folder)
-
-        if os.path.isdir(path):
-            return path
-
-    return "projects"
+from config import settings
 
 
 def scrub(text, token=None):
@@ -45,20 +31,17 @@ def _run_git(args, repo_path, extra_env=None):
     )
 
 
-def push_to_github():
+def push_to_github(repo_path):
     token = None
 
     try:
-        repo_path = "projects"
-
-        # ✅ Get env variables properly
-        username = os.getenv("GITHUB_USERNAME")
-        token = os.getenv("GITHUB_TOKEN")
+        username = settings.github_username
+        token = settings.github_token
 
         if not username or not token:
             raise Exception("❌ GITHUB_USERNAME or GITHUB_TOKEN not set in .env")
 
-        repo_name = os.getenv("GITHUB_REPO_NAME", "ai-devops-deploy")
+        repo_name = settings.github_repo_name
 
         # No credentials embedded in the remote URL — auth is passed per-command
         # below via a git -c http.extraheader, so nothing persists into

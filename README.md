@@ -1,5 +1,7 @@
 🤖 AI DevOps Assistant
 
+[![CI](https://github.com/Rakesh-Tummala/ai-devops-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/Rakesh-Tummala/ai-devops-assistant/actions/workflows/ci.yml)
+
 Debugging logs and writing YAML files shouldn't take up half your day. AI DevOps Assistant is a Groq-powered tool that automates the "chore" parts of DevOps — deciphering error logs, scaffolding CI/CD pipelines and Dockerfiles, answering DevOps questions, and deploying a project straight to Render with one upload.
 
 🔗 Live App
@@ -47,7 +49,7 @@ Tell the AI your project type (optionally upload a manifest like `package.json`/
 5. **CI/CD Generator tab** — pick a project type and target platform, optionally attach a manifest file for extra context, click **Generate**.
 6. **Dockerfile Generator tab** — pick a project type, optionally attach a manifest file, click **Generate**.
 
-Uploads are capped (50MB for zips, 2MB for text/log files fed to the AI) and zip contents are validated before extraction — oversized or malformed uploads are rejected with a clear error instead of being processed.
+Uploads are capped (500MB for zips, 2MB for text/log files fed to the AI) and zip contents are validated before extraction — oversized or malformed uploads are rejected with a clear error instead of being processed.
 
 🏗 Architecture
 
@@ -74,11 +76,11 @@ The deploy target repo (`ai-devops-deploy` by default) is a separate, disposable
 - **The four AI features** (Chat, Log Analyzer, CI/CD Generator, Dockerfile Generator) are simple and stateless — each one builds a system + user prompt and calls Groq's `chat.completions.create`, then returns the text. No shared state between requests.
 - **Deploy** is a multi-stage pipeline that runs in a background thread so the upload request itself returns immediately:
 
-  1. **Upload zip** — filename is checked against `^[A-Za-z0-9_.-]+\.zip$` (rejects path separators and anything but a plain `.zip`), and the file is streamed to disk with a running 50MB cap.
+  1. **Upload zip** — filename is checked against `^[A-Za-z0-9_.-]+\.zip$` (rejects path separators and anything but a plain `.zip`), and the file is streamed to disk with a running 500MB cap.
   2. **Extract safely** — every zip entry's target path is resolved and checked against the destination folder before writing; entries with `../`, absolute paths, or drive letters are rejected outright (blocks zip-slip). Entry count and total uncompressed size are capped too (blocks zip bombs).
   3. **Detect project type** — reads `package.json` (checks for `next`/`vite`/`react` keywords) or `requirements.txt`/`main.py`/`app.py` (checks for `fastapi`/`flask`) to classify the project as `nextjs` / `vite` / `react` / `node` / `fastapi` / `flask` / `python` / `unknown`.
   4. **Generate Dockerfile** — a fixed template per detected type (Node/Vite/React → `node:lts-alpine` + `serve`, Python → `python:3.11-slim` + `uvicorn`, unknown → `nginx:alpine` static). Deliberately deterministic, not AI-generated — this step has to be fast and reliable on every single deploy.
-  5. **Push to GitHub** — `git init`/`add`/`commit`/`push --force` against the scratch repo. The GitHub token is never embedded in the remote URL; it's passed per-command via `git -c http.extraheader="Authorization: Basic <base64>"`, so it never persists into `.git/config` or gets echoed into an error message.
+  5. **Push to GitHub** — `git init`/`add`/`commit`/`push --force` against the scratch repo. The GitHub token is never embedded in the remote URL and never appears as a literal command-line argument (which tools like `ps` or Task Manager could read off a running process); it's passed to the push command only via `GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0` environment variables (`http.extraheader=Authorization: Basic <base64>`), so it never persists into `.git/config`, gets echoed into an error message, or shows up in the process's argv.
   6. **Create Render service** — calls Render's REST API to spin up a new web service from that repo, then polls `GET /v1/services/{id}` every 5 seconds (up to 10 minutes) until `serviceDetails.url` is populated.
   7. **Live URL returned** — surfaced through `/deployment-status/`, which the frontend polls every 2 seconds and reflects in the progress bar and logs.
 
@@ -95,8 +97,8 @@ This was added deliberately after the backend was made public: **originally ther
 - **Zip-slip protection** — extraction validates every member's resolved path before writing, instead of a bare `zipfile.extractall()`.
 - **No credentials in the git remote URL** — the GitHub token is passed per-command via an HTTP auth header, never embedded in the URL or written to `.git/config`.
 - **CORS is an explicit allowlist** (`ALLOWED_ORIGINS`), not `allow_origins=["*"]`.
-- **Upload limits** — filename pattern validation, a 50MB cap on zips, a 2MB cap on text fed to the AI.
-- **Concurrency lock** — one deploy at a time; no racing on shared state or the working directory.
+- **Upload limits** — filename pattern validation, a 500MB cap on zips, a 2MB cap on text fed to the AI.
+- **Concurrency lock** — one deploy at a time; each deploy also gets its own isolated working directory under `projects/<deploy_id>/`, so there's no racing on the filesystem even during the brief window before the lock is checked.
 
 🛠️ Tech Stack
 
@@ -152,16 +154,35 @@ npm run dev
 
 Open in browser: http://localhost:5173 — note that `frontend/src/App.jsx` has `API_URL` hardcoded to the deployed Render backend; point it at `http://127.0.0.1:8000` if you want the local frontend talking to a local backend instead.
 
+🧪 Testing
+
+The backend is covered by a `pytest` suite: unit tests for zip-slip/zip-bomb protection and project-type detection, plus integration tests (via FastAPI's `TestClient`) for the access-key gate and the full upload-zip → deploy pipeline, with the GitHub/Render/Groq calls mocked out so the suite never touches real infrastructure.
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest          # run the test suite
+mypy .           # type-check
+```
+
+The frontend is type-checked and linted:
+
+```bash
+cd frontend
+npm run lint
+```
+
+Both run on every push and pull request via [GitHub Actions](.github/workflows/ci.yml).
+
 📡 API Endpoints
 All routes below require the `X-App-Key` header (see [Access Key & Security](#-access-key--security)) except `GET /`.
 
 | Endpoint              | Method | Description                        |
 | ---------------------- | ------ | ----------------------------------- |
 | `/`                    | GET    | Health check (no key required)      |
-| `/upload-zip/`         | POST   | Upload a project ZIP and deploy it  |
+| `/upload-zip/`         | POST   | Upload a project ZIP and deploy it — returns a `deploy_id` |
 | `/deployment-status/`  | GET    | Poll current deployment status/logs |
 | `/reset-deployment/`   | POST   | Reset deployment state              |
-| `/detect-project/`     | GET    | Detect the current project's type   |
 | `/analyze-log/`        | POST   | Log Analyzer                        |
 | `/chat/`               | POST   | DevOps Chat                         |
 | `/generate-cicd/`      | POST   | CI/CD Generator                     |
@@ -171,30 +192,44 @@ All routes below require the `X-App-Key` header (see [Access Key & Security](#-a
 ```
 ai-devops-assistant/
 ├── backend/
-│   ├── main.py                     # routes, access-key gate, deploy orchestration
+│   ├── main.py                     # thin entrypoint: `from app import app`
+│   ├── app.py                      # app factory: CORS, router wiring, startup checks
+│   ├── config.py                   # env var loading + fail-fast validation
+│   ├── auth.py                     # X-App-Key dependency
+│   ├── models.py                   # Pydantic request/response schemas
+│   ├── state.py                    # in-memory deployment state + per-deploy dirs
 │   ├── deploy_render.py            # Render REST API calls
+│   ├── routes/
+│   │   ├── health.py                # GET /
+│   │   ├── deploy.py                 # upload-zip / deployment-status / reset-deployment
+│   │   └── ai.py                     # chat / analyze-log / generate-cicd / generate-docker
+│   ├── services/
+│   │   ├── groq_service.py          # Groq client + startup model-availability check
+│   │   └── deploy_service.py        # Dockerfile gen, GitHub push + Render orchestration
 │   ├── deployment/
 │   │   └── github_push.py          # git init/add/commit/push, credential handling
 │   ├── utils/
 │   │   ├── zip_handler.py          # safe zip extraction (zip-slip / zip-bomb protection)
 │   │   └── project_detector.py     # project-type detection
+│   ├── tests/                      # pytest suite (see Testing below)
 │   ├── Dockerfile
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── requirements-dev.txt        # + pytest, httpx, mypy
 │
 ├── frontend/
 │   └── src/
 │       └── App.jsx                 # all 5 tabs, unlock screen, API calls
 │
+├── .github/workflows/ci.yml        # backend tests+mypy, frontend lint+build
 ├── .env.example
 └── README.md
 ```
 
 ⚠️ Known Limitations
 
-- **Global in-memory deployment state** (`deployment_status`/`deployment_logs` as module-level variables) only works because the backend runs as a single process/worker on Render. It wouldn't survive multiple workers or a process restart mid-deploy.
+- **Global in-memory deployment state** (a single `DeploymentState` instance) only works because the backend runs as a single process/worker on Render. It wouldn't survive multiple workers or a process restart mid-deploy. Each deploy does get its own isolated working directory under `projects/<deploy_id>/` (cleaned up once pushed), so concurrent uploads no longer race on the filesystem — but the *status/logs* shown to the UI are still one global "current deploy," not one per user.
 - **Shared access key, not per-user auth.** Keeps random visitors out; doesn't give distinct accounts or permissions to multiple real users.
-- **Single, fixed scratch repo** for all deploys — not isolated per user or per deploy. Concurrent users would overwrite each other's in-flight deploys.
-- **No automated test suite.** Correctness has been verified through live, manual, end-to-end runs against real GitHub/Render/Groq rather than CI tests.
+- **Single, fixed scratch repo** for all deploys — not isolated per user or per deploy, and pushes are serialized behind one lock as a direct consequence. Concurrent users would overwrite each other's in-flight deploys. Fixing this for real would mean creating a throwaway GitHub repo per deploy rather than force-pushing over one shared repo — a bigger change (and one with its own side effect: repos accumulating on the account) that hasn't been done here.
 
 🎯 Roadmap
 - Support additional deploy targets beyond Render (Railway, Fly.io, AWS)

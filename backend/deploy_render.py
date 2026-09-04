@@ -1,11 +1,7 @@
-import os
 import requests
 import time
-from dotenv import load_dotenv
 
-load_dotenv()
-
-RENDER_API_KEY = os.getenv("RENDER_API_KEY")
+from config import settings
 
 
 def get_owner_id():
@@ -13,7 +9,7 @@ def get_owner_id():
     url = "https://api.render.com/v1/owners"
 
     headers = {
-        "Authorization": f"Bearer {RENDER_API_KEY}",
+        "Authorization": f"Bearer {settings.render_api_key}",
         "Accept": "application/json"
     }
 
@@ -39,7 +35,7 @@ def deploy_to_render(service_name="ai-deploy", repo_url=None):
     url = "https://api.render.com/v1/services"
 
     headers = {
-        "Authorization": f"Bearer {RENDER_API_KEY}",
+        "Authorization": f"Bearer {settings.render_api_key}",
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
@@ -71,7 +67,7 @@ def get_service(service_id):
     url = f"https://api.render.com/v1/services/{service_id}"
 
     headers = {
-        "Authorization": f"Bearer {RENDER_API_KEY}",
+        "Authorization": f"Bearer {settings.render_api_key}",
         "Accept": "application/json"
     }
 
